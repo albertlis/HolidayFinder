@@ -83,7 +83,7 @@ def render_html(offers: list[EasyDict]) -> str:
 
 
 def get_lastminuter_entries(rss_url: str) -> list[FeedParserDict]:
-    rss = requests.get(rss_url)  # , verify=False)
+    rss = requests.get(rss_url)#, verify=False)
     feed = feedparser.parse(rss.text)
     return feed.entries
 
@@ -102,7 +102,7 @@ def send_mail(html_content: str) -> None:
     with open('secrets.yml', 'rt') as f:
         secrets = EasyDict(yaml.safe_load(f))
     email_subject = 'Oferty wakacje'
-    yag = yagmail.SMTP(secrets.scr_mail, secrets.src_pwd, port=587, smtp_starttls=True)  # , smtp_ssl=False)
+    yag = yagmail.SMTP(secrets.src_mail, secrets.src_pwd, port=587, smtp_starttls=True, smtp_ssl=False)
     yag.send(to=secrets.dst_mail, subject=email_subject, contents=(html_content, 'text/html'))
 
 
