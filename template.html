@@ -9,17 +9,17 @@
         <caption><h2>Oferty</h2></caption>
         <thead style="border-bottom: solid 2px #e5e5e5">
             <tr style="border-bottom: 1px solid #e5e5e5">
-                <th style="color: #646464; font-size: 1.2em; font-weight: 300; padding: 0 0.75em 0.75em 0.75em; text-align: left">Tytuł</th>
-                <th style="color: #646464; font-size: 1.2em; font-weight: 300; padding: 0 0.75em 0.75em 0.75em; text-align: left">Cena</th>
-                <th style="color: #646464; font-size: 1.2em; font-weight: 300; padding: 0 0.75em 0.75em 0.75em; text-align: left">Kategoria</th>
+                <th style="color: #646464; text-align: left">Tytuł</th>
+                <th style="color: #646464; text-align: left">Cena</th>
+                <th style="color: #646464; text-align: left">Kategoria</th>
             </tr>
         </thead>
         <tbody>
             {% for item in offers %}
-                <tr>
-                    <td><a href="{{ item.link }}">{{ item.title }}</a></td>
-                    <td>{{ item.price_str }}</td>
-                    <td>{{ item.category }}</td>
+                <tr style="border-bottom: 1px solid #e5e5e5; margin-top: 10px;">
+                    <td style="padding: 10px 0;"><a href="{{ item.link }}">{{ item.title }}</a></td>
+                    <td style="padding: 10px 0;">{{ item.price_str }}</td>
+                    <td style="padding: 10px 0;">{{ item.category }}</td>
                 </tr>
             {% endfor %}
         </tbody>
