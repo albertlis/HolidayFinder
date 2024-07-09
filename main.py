@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import pickle
 import re
@@ -31,12 +32,12 @@ def get_driver() -> webdriver.Chrome:
 
 def get_wakacyjni_piraci_divs(driver: webdriver.Chrome) -> list[WebElement]:
     driver.get('https://www.wakacyjnipiraci.pl')
-    button = WebDriverWait(driver, 10).until(
+    button = WebDriverWait(driver, 20).until(
         EC.presence_of_element_located((By.XPATH, "//button[normalize-space()='Akceptuj wszystko']"))
     )
     # Accept cookies
     button.click()
-    divs = WebDriverWait(driver, 10).until(
+    divs = WebDriverWait(driver, 20).until(
         EC.presence_of_all_elements_located((By.XPATH, "//div[starts-with(@style, 'order')]"))
     )
     return divs
@@ -48,15 +49,14 @@ def create_wakacyjni_piraci_offers(filtered_divs: list[WebElement]) -> list[Easy
         a = d.find_element(By.TAG_NAME, 'a')
         href = a.get_attribute('href')
         splitted_text = d.text.split('\n')
+        if 'inclusive' not in d.text.lower():
+            continue
         # remove publish date
-        _ = splitted_text.pop()
         indexes_to_ignore = set()
         price_str = main_category = sub_category = ''
         for i, s in enumerate(splitted_text):
-            if s.upper().strip() in {'ZA', 'OD'}:
-                price_str = ' '.join([s.strip(), splitted_text[i + 1].strip()])
-                del splitted_text[i + 1]
-                del splitted_text[i]
+            if s.lower().strip().startswith(('za', 'od')):
+                price_str = s.strip()
                 break
 
         for i, s in enumerate(splitted_text):
@@ -125,21 +125,18 @@ def lastminuter_to_offer(feed: FeedParserDict) -> EasyDict:
 
 
 def get_fly4free_divs(driver: webdriver.Chrome, category: str, is_first_call: bool = False) -> list[WebElement]:
-    if category == 'first-minute':
-        driver.get(f'https://www.fly4free.pl/tag/first-minute/')
+    if category in {'first-minute', 'wakacje'}:
+        driver.get(f'https://www.fly4free.pl/tag/{category}/')
     else:
         driver.get(f'https://www.fly4free.pl/tanie-loty/{category}/')
     if is_first_call:
-        try:
-            button = WebDriverWait(driver, 10).until(
+        with contextlib.suppress(TimeoutException):
+            button = WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.XPATH, "//button[normalize-space()='ZGADZAM SIĘ']"))
             )
             # Accept cookies
             button.click()
-        except TimeoutException:
-            pass
-
-    offers_div = WebDriverWait(driver, 10).until(
+    offers_div = WebDriverWait(driver, 20).until(
         EC.presence_of_element_located((By.CLASS_NAME, 'row-equal'))
     )
     offers_divs = offers_div.find_elements(By.XPATH, "./div[contains(@class, 'col-xs-12')]")
@@ -168,16 +165,19 @@ def get_fly4free_category_offers(offers_divs: list[WebElement], category: str) -
             price_int = int(re.search(r'\d+', price_text).group())
             if price_int > 1000:
                 continue
-        if category in {'wczasy', 'majowka', 'first-minute'}:
+        if category in {'wczasy', 'wakacje', 'first-minute'}:
             category = 'wczasy'
 
         title = offer_div.find_element(By.CLASS_NAME, 'item__title')
         a_tag = title.find_element(By.TAG_NAME, 'a')
+        title = a_tag.text
+        if 'inclusive' not in title.lower():
+            continue
         href = a_tag.get_attribute('href')
         offer = EasyDict(
             category=category,
             price_str=price_text,
-            title=a_tag.text,
+            title=title,
             link=href
         )
         offers.append(offer)
@@ -221,13 +221,16 @@ def main():
     driver = get_driver()
     divs = get_wakacyjni_piraci_divs(driver)
 
-    filtered_divs = [div for div in divs[:18] if re.search(r'(ZA\n|OD\n)', div.text)]
+    # 18 elements on page -> others are trash
+    filtered_divs = [div for div in divs[:18] if re.search(r'(Za|Od)', div.text)]
+    if not filtered_divs:
+        print('Wakacyjni piraci - nic nie znaleziono')
     piraci_offers = create_wakacyjni_piraci_offers(filtered_divs)
     piraci_offers = [offer for offer in piraci_offers if offer not in previous_piraci_offers]
     offers.extend(piraci_offers)
     previous_piraci_offers = [*previous_piraci_offers, *piraci_offers][-300:]
 
-    categories = ('loty', 'wczasy', 'weekend')
+    categories = ('loty', 'wczasy', 'weekend', 'wakacje', 'first-minute')
     all_fly4free_offers = []
     for i, cat in enumerate(categories):
         filtered_offers_divs = get_fly4free_divs(driver, cat, is_first_call=(i == 0))
@@ -242,8 +245,8 @@ def main():
     driver.close()
 
     html_content = render_html(offers)
-    # with open('holidays.html', 'w', encoding='utf-8') as f:
-    #     f.write(html_content)
+    with open('holidays.html', 'w', encoding='utf-8') as f:
+        f.write(html_content)
 
     with open('previous_offers.pkl', 'wb') as f:
         pickle.dump(
