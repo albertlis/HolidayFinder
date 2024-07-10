@@ -43,10 +43,13 @@ def get_wakacyjni_piraci_divs(driver: webdriver.Chrome) -> list[WebElement]:
     return divs
 
 
-def create_wakacyjni_piraci_offers(filtered_divs: list[WebElement]) -> list[EasyDict]:
+def create_wakacyjni_piraci_offers(filtered_divs: list[WebElement], driver: webdriver.Chrome) -> list[EasyDict]:
     wakacyjni_piraci_offers = []
     for d in filtered_divs:
-        a = d.find_element(By.TAG_NAME, 'a')
+        try:
+            a = d.find_element(By.TAG_NAME, 'a')
+        except:
+            continue
         href = a.get_attribute('href')
         splitted_text = d.text.split('\n')
         if 'inclusive' not in d.text.lower():
@@ -68,12 +71,23 @@ def create_wakacyjni_piraci_offers(filtered_divs: list[WebElement]) -> list[Easy
                     indexes_to_ignore.add(i - 1)
         left_text_lines = [s for i, s in enumerate(splitted_text) if i not in indexes_to_ignore]
         title = ''.join(left_text_lines)
+
+        # Open the link with the driver and find the specific link in the div
+        driver.get(href)
+        try:
+            specific_link_element = WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.XPATH, "//div[@class='hp__sc-1v8qbhd-0 ccLcxQ']/a"))
+            )
+            specific_link = specific_link_element.get_attribute('href')
+        except TimeoutException:
+            specific_link = href
+
         wakacyjni_piraci_offers.append(
             EasyDict(
                 category=f'{main_category} {sub_category}'.strip(),
                 price_str=price_str,
                 title=title,
-                link=href
+                link=specific_link
             )
         )
     return wakacyjni_piraci_offers
@@ -114,14 +128,24 @@ def get_lastminuter_offer_category(url: str) -> str:
     return text
 
 
-def lastminuter_to_offer(feed: FeedParserDict) -> EasyDict:
+def lastminuter_to_offer(feed: FeedParserDict, driver: webdriver.Chrome) -> EasyDict:
     pattern = r'(od|za)\s*\d+\s*zł'
     title = feed.title
     price = re.search(pattern, title)
     if price:
         price = price.group()
         title = re.sub(price, '', title)
-    return EasyDict(link=feed.link, title=title, price_str=price, category=get_lastminuter_offer_category(feed.link))
+
+    driver.get(feed.link)
+    try:
+        offer_link_element = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//div[@class='deal__button']/a"))
+        )
+        offer_link = offer_link_element.get_attribute('href')
+    except TimeoutException:
+        offer_link = feed.link
+
+    return EasyDict(link=offer_link, title=title, price_str=price, category=get_lastminuter_offer_category(feed.link))
 
 
 def get_fly4free_divs(driver: webdriver.Chrome, category: str, is_first_call: bool = False) -> list[WebElement]:
@@ -215,17 +239,17 @@ def main():
     load_from_cache(previous_piraci_offers, previous_lastminuter_offers, previous_fly4free_offers)
 
     lastminuter_entries = get_lastminuter_entries(LASTMINUTER_RSS_URL)
-    offers = [lastminuter_to_offer(e) for e in lastminuter_entries]
+    driver = get_driver()
+    offers = [lastminuter_to_offer(e, driver) for e in lastminuter_entries]
     offers = [offer for offer in offers if offer not in previous_lastminuter_offers]
     previous_lastminuter_offers = [*previous_lastminuter_offers, *offers][-300:]
-    driver = get_driver()
     divs = get_wakacyjni_piraci_divs(driver)
 
     # 18 elements on page -> others are trash
     filtered_divs = [div for div in divs[:18] if re.search(r'(Za|Od)', div.text)]
     if not filtered_divs:
         print('Wakacyjni piraci - nic nie znaleziono')
-    piraci_offers = create_wakacyjni_piraci_offers(filtered_divs)
+    piraci_offers = create_wakacyjni_piraci_offers(filtered_divs, driver)
     piraci_offers = [offer for offer in piraci_offers if offer not in previous_piraci_offers]
     offers.extend(piraci_offers)
     previous_piraci_offers = [*previous_piraci_offers, *piraci_offers][-300:]
