@@ -10,9 +10,9 @@ jinja2 = "*"
 schedule = "*"
 webdriver-manager = "*"
 selenium = "*"
-easydict = "*"
-pyyaml = "*"
 beautifulsoup4 = "*"
+zstandard = "*"
+python-dotenv = "*"
 
 [dev-packages]
 #[requires]
